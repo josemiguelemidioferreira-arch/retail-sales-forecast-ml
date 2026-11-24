@@ -1,0 +1,385 @@
+
+-- =====================================================
+-- PROJETO: SISTEMA DE GERENCIAMENTO DE ESTOQUE (SGE)
+-- BANCO DE DADOS: MySQL 8.0
+-- DDL + DML + CONSULTAS
+-- =====================================================
+
+CREATE DATABASE IF NOT EXISTS sistema_estoque;
+USE sistema_estoque;
+
+
+-- =====================================================
+-- PARTE 1: DDL - CRIACAO DAS TABELAS
+-- =====================================================
+
+-- CENARIO 1: CONFIGURACAO INICIAL DA LOJA
+
+-- 1. CATEGORIAS
+CREATE TABLE categorias (
+    id_categoria INT AUTO_INCREMENT,
+    nome VARCHAR(100) NOT NULL UNIQUE,
+    descricao VARCHAR(255),
+    status BOOLEAN DEFAULT TRUE,
+    data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_categoria)
+);
+
+-- 2. FORNECEDORES
+CREATE TABLE fornecedores (
+    id_fornecedor INT AUTO_INCREMENT,
+    nome VARCHAR(120) NOT NULL,
+    cnpj VARCHAR(18) NOT NULL UNIQUE,
+    telefone VARCHAR(20),
+    email VARCHAR(120),
+    cidade VARCHAR(100),
+    PRIMARY KEY (id_fornecedor)
+);
+
+-- 3. CLIENTES
+CREATE TABLE clientes (
+    id_cliente INT AUTO_INCREMENT,
+    nome VARCHAR(120) NOT NULL,
+    cpf VARCHAR(14) NOT NULL UNIQUE,
+    telefone VARCHAR(20),
+    email VARCHAR(120),
+    data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_cliente)
+);
+
+-- 4. FUNCIONARIOS
+CREATE TABLE funcionarios (
+    id_funcionario INT AUTO_INCREMENT,
+    nome VARCHAR(120) NOT NULL,
+    cpf VARCHAR(14) NOT NULL UNIQUE,
+    cargo VARCHAR(80) NOT NULL,
+    salario DECIMAL(10,2) NOT NULL,
+    data_admissao DATE NOT NULL,
+    PRIMARY KEY (id_funcionario),
+    CHECK (salario >= 0)
+);
+
+-- 5. PRODUTOS
+CREATE TABLE produtos (
+    id_produto INT AUTO_INCREMENT,
+    nome VARCHAR(120) NOT NULL,
+    descricao VARCHAR(255),
+    preco_venda DECIMAL(10,2) NOT NULL,
+    estoque_atual INT DEFAULT 0,
+    estoque_minimo INT DEFAULT 5,
+    id_categoria INT NOT NULL,
+    id_fornecedor INT NOT NULL,
+    PRIMARY KEY (id_produto),
+
+    CONSTRAINT fk_produto_categoria
+    FOREIGN KEY (id_categoria)
+    REFERENCES categorias(id_categoria),
+
+    CONSTRAINT fk_produto_fornecedor
+    FOREIGN KEY (id_fornecedor)
+    REFERENCES fornecedores(id_fornecedor),
+
+    CHECK (preco_venda > 0),
+    CHECK (estoque_atual >= 0),
+    CHECK (estoque_minimo >= 0)
+);
+
+-- 6. COMPRAS
+CREATE TABLE compras (
+    id_compra INT AUTO_INCREMENT,
+    id_fornecedor INT NOT NULL,
+    id_funcionario INT NOT NULL,
+    data_compra DATE NOT NULL,
+    valor_total DECIMAL(10,2) NOT NULL,
+    status VARCHAR(20) DEFAULT 'Recebida',
+    PRIMARY KEY (id_compra),
+
+    FOREIGN KEY (id_fornecedor)
+    REFERENCES fornecedores(id_fornecedor),
+
+    FOREIGN KEY (id_funcionario)
+    REFERENCES funcionarios(id_funcionario),
+
+    CHECK (valor_total >= 0),
+    CHECK (status IN ('Recebida', 'Pendente', 'Cancelada'))
+);
+
+-- 7. ITENS DA COMPRA
+CREATE TABLE itens_compra (
+    id_item_compra INT AUTO_INCREMENT,
+    id_compra INT NOT NULL,
+    id_produto INT NOT NULL,
+    quantidade INT NOT NULL,
+    preco_unitario DECIMAL(10,2) NOT NULL,
+    subtotal DECIMAL(10,2) NOT NULL,
+    PRIMARY KEY (id_item_compra),
+
+    FOREIGN KEY (id_compra)
+    REFERENCES compras(id_compra),
+
+    FOREIGN KEY (id_produto)
+    REFERENCES produtos(id_produto),
+
+    CHECK (quantidade > 0),
+    CHECK (preco_unitario > 0),
+    CHECK (subtotal >= 0)
+);
+
+-- 8. VENDAS
+CREATE TABLE vendas (
+    id_venda INT AUTO_INCREMENT,
+    id_cliente INT NOT NULL,
+    id_funcionario INT NOT NULL,
+    data_venda DATE NOT NULL,
+    valor_total DECIMAL(10,2) NOT NULL,
+    forma_pagamento VARCHAR(30) NOT NULL,
+    PRIMARY KEY (id_venda),
+
+    FOREIGN KEY (id_cliente)
+    REFERENCES clientes(id_cliente),
+
+    FOREIGN KEY (id_funcionario)
+    REFERENCES funcionarios(id_funcionario),
+
+    CHECK (valor_total >= 0)
+);
+
+-- 9. ITENS DA VENDA
+CREATE TABLE itens_venda (
+    id_item_venda INT AUTO_INCREMENT,
+    id_venda INT NOT NULL,
+    id_produto INT NOT NULL,
+    quantidade INT NOT NULL,
+    preco_unitario DECIMAL(10,2) NOT NULL,
+    subtotal DECIMAL(10,2) NOT NULL,
+    PRIMARY KEY (id_item_venda),
+
+    FOREIGN KEY (id_venda)
+    REFERENCES vendas(id_venda),
+
+    FOREIGN KEY (id_produto)
+    REFERENCES produtos(id_produto),
+
+    CHECK (quantidade > 0),
+    CHECK (preco_unitario > 0),
+    CHECK (subtotal >= 0)
+);
+
+
+-- =====================================================
+-- PARTE 2: DML - INSERCAO E MANIPULACAO DOS DADOS
+-- =====================================================
+
+-- CENARIO 1: CONFIGURACAO INICIAL E CATALOGO
+-- O proprietario cadastrou as categorias e fornecedores.
+
+INSERT INTO categorias (nome, descricao) VALUES
+('Eletronicos', 'Produtos eletronicos e acessorios'),
+('Alimentos', 'Produtos alimenticios'),
+('Vestuario', 'Roupas e acessorios'),
+('Informatica', 'Equipamentos de informatica'),
+('Limpeza', 'Produtos de limpeza');
+
+INSERT INTO fornecedores
+(nome, cnpj, telefone, email, cidade) VALUES
+('Tech Distribuidora', '12.345.678/0001-90',
+ '(84) 3333-1000', 'contato@tech.com', 'Natal'),
+('Alimentos Nordeste', '23.456.789/0001-01',
+ '(84) 3333-2000', 'vendas@alimentos.com', 'Parnamirim'),
+('Moda Brasil', '34.567.890/0001-12',
+ '(84) 3333-3000', 'contato@modabrasil.com', 'Recife'),
+('Info Center', '45.678.901/0001-23',
+ '(84) 3333-4000', 'vendas@infocenter.com', 'Natal'),
+('Distribuidora Limpa', '56.789.012/0001-34',
+ '(84) 3333-5000', 'contato@limpa.com', 'Joao Pessoa');
+
+
+-- CENARIO 2: CONTRATACAO E CADASTRO DE CLIENTES
+-- A loja contratou funcionarios e cadastrou seus clientes.
+
+INSERT INTO funcionarios
+(nome, cpf, cargo, salario, data_admissao) VALUES
+('Carlos Eduardo', '111.111.111-11',
+ 'Gerente', 3500.00, '2026-01-02'),
+('Ana Beatriz', '222.222.222-22',
+ 'Vendedora', 1900.00, '2026-01-03'),
+('Pedro Henrique', '333.333.333-33',
+ 'Estoquista', 2000.00, '2026-01-03'),
+('Mariana Costa', '444.444.444-44',
+ 'Vendedora', 1900.00, '2026-01-04'),
+('Lucas Martins', '555.555.555-55',
+ 'Operador de caixa', 1800.00, '2026-01-04');
+
+INSERT INTO clientes
+(nome, cpf, telefone, email) VALUES
+('Jose Silva', '666.666.666-66',
+ '(84) 99999-1001', 'jose@email.com'),
+('Maria Oliveira', '777.777.777-77',
+ '(84) 99999-1002', 'maria@email.com'),
+('Joao Pedro', '888.888.888-88',
+ '(84) 99999-1003', 'joao@email.com'),
+('Fernanda Lima', '999.999.999-99',
+ '(84) 99999-1004', 'fernanda@email.com'),
+('Rafael Santos', '123.456.789-10',
+ '(84) 99999-1005', 'rafael@email.com');
+
+
+-- CENARIO 3: CADASTRO DOS PRODUTOS
+-- A loja cadastrou os produtos que serao comercializados.
+
+INSERT INTO produtos
+(nome, descricao, preco_venda, estoque_atual,
+ estoque_minimo, id_categoria, id_fornecedor) VALUES
+('Fone Bluetooth', 'Fone sem fio',
+ 30.00, 0, 5, 1, 1),
+('Teclado Mecanico', 'Teclado USB para computador',
+ 40.00, 0, 5, 4, 4),
+('Arroz 5kg', 'Pacote de arroz tipo 1',
+ 50.00, 0, 5, 2, 2),
+('Camisa Polo', 'Camisa masculina tamanho M',
+ 30.00, 0, 5, 3, 3),
+('Detergente', 'Detergente liquido 500ml',
+ 75.00, 0, 5, 5, 5);
+
+
+-- CENARIO 4: RECEBIMENTO DE MERCADORIAS
+-- Os fornecedores entregaram os primeiros produtos.
+
+INSERT INTO compras
+(id_fornecedor, id_funcionario, data_compra,
+ valor_total, status) VALUES
+(1, 1, '2026-01-05', 600.00, 'Recebida'),
+(2, 3, '2026-01-07', 450.00, 'Recebida'),
+(3, 3, '2026-01-10', 500.00, 'Recebida'),
+(4, 1, '2026-01-15', 300.00, 'Recebida'),
+(5, 3, '2026-01-20', 450.00, 'Recebida');
+
+-- Registro dos itens recebidos em cada compra.
+
+INSERT INTO itens_compra
+(id_compra, id_produto, quantidade,
+ preco_unitario, subtotal) VALUES
+(1, 1, 10, 20.00, 200.00),
+(1, 2, 10, 40.00, 400.00),
+(2, 3, 10, 30.00, 300.00),
+(2, 4, 10, 15.00, 150.00),
+(3, 5, 10, 50.00, 500.00),
+(4, 1, 5, 20.00, 100.00),
+(4, 2, 5, 40.00, 200.00),
+(5, 4, 10, 15.00, 150.00),
+(5, 5, 6, 50.00, 300.00);
+
+-- Atualizacao do estoque com os produtos recebidos.
+
+UPDATE produtos p
+SET estoque_atual = (
+    SELECT COALESCE(SUM(ic.quantidade), 0)
+    FROM itens_compra ic
+    INNER JOIN compras c
+    ON c.id_compra = ic.id_compra
+    WHERE ic.id_produto = p.id_produto
+    AND c.status = 'Recebida'
+);
+
+
+-- CENARIO 5: PRIMEIRAS VENDAS
+-- Os clientes realizaram suas primeiras compras.
+
+INSERT INTO vendas
+(id_cliente, id_funcionario, data_venda,
+ valor_total, forma_pagamento) VALUES
+(1, 2, '2026-02-01', 180.00, 'Pix'),
+(2, 4, '2026-02-02', 150.00, 'Cartao'),
+(3, 2, '2026-02-03', 150.00, 'Dinheiro'),
+(4, 4, '2026-02-04', 150.00, 'Pix'),
+(5, 5, '2026-02-05', 150.00, 'Cartao');
+
+-- Registro dos produtos vendidos.
+
+INSERT INTO itens_venda
+(id_venda, id_produto, quantidade,
+ preco_unitario, subtotal) VALUES
+(1, 1, 2, 30.00, 60.00),
+(1, 2, 3, 40.00, 120.00),
+(2, 3, 3, 50.00, 150.00),
+(3, 4, 5, 30.00, 150.00),
+(4, 5, 2, 75.00, 150.00),
+(5, 1, 3, 30.00, 90.00),
+(5, 4, 2, 30.00, 60.00);
+
+
+-- CENARIO 6: ATUALIZACAO DO ESTOQUE
+-- O sistema desconta os produtos vendidos.
+
+UPDATE produtos p
+SET estoque_atual = estoque_atual - (
+    SELECT COALESCE(SUM(iv.quantidade), 0)
+    FROM itens_venda iv
+    INNER JOIN vendas v
+    ON v.id_venda = iv.id_venda
+    WHERE iv.id_produto = p.id_produto
+);
+
+
+-- =====================================================
+-- PARTE 3: CONSULTAS PARA VALIDACAO DO SISTEMA
+-- =====================================================
+
+-- 1. CONSULTAR TODOS OS PRODUTOS
+SELECT * FROM produtos;
+
+-- 2. CONSULTAR PRODUTOS COM ESTOQUE BAIXO
+SELECT nome, estoque_atual, estoque_minimo
+FROM produtos
+WHERE estoque_atual <= estoque_minimo;
+
+-- 3. PRODUTOS E SUAS CATEGORIAS
+SELECT
+    p.nome AS produto,
+    c.nome AS categoria,
+    p.preco_venda,
+    p.estoque_atual
+FROM produtos p
+INNER JOIN categorias c
+ON p.id_categoria = c.id_categoria;
+
+-- 4. HISTORICO DE VENDAS
+SELECT
+    v.id_venda,
+    cl.nome AS cliente,
+    f.nome AS funcionario,
+    v.data_venda,
+    v.valor_total,
+    v.forma_pagamento
+FROM vendas v
+INNER JOIN clientes cl
+ON v.id_cliente = cl.id_cliente
+INNER JOIN funcionarios f
+ON v.id_funcionario = f.id_funcionario;
+
+-- 5. FATURAMENTO TOTAL
+SELECT SUM(valor_total) AS faturamento
+FROM vendas;
+
+-- 6. QUANTIDADE DE REGISTROS EM CADA TABELA
+SELECT 'categorias' AS tabela, COUNT(*) AS registros FROM categorias
+UNION ALL
+SELECT 'fornecedores', COUNT(*) FROM fornecedores
+UNION ALL
+SELECT 'clientes', COUNT(*) FROM clientes
+UNION ALL
+SELECT 'funcionarios', COUNT(*) FROM funcionarios
+UNION ALL
+SELECT 'produtos', COUNT(*) FROM produtos
+UNION ALL
+SELECT 'compras', COUNT(*) FROM compras
+UNION ALL
+SELECT 'itens_compra', COUNT(*) FROM itens_compra
+UNION ALL
+SELECT 'vendas', COUNT(*) FROM vendas
+UNION ALL
+SELECT 'itens_venda', COUNT(*) FROM itens_venda;
+
+-- =====================================================
+-- FIM DO PROJETO
+-- =====================================================
